@@ -9,7 +9,7 @@ namespace MeadowApiModeSwitcher
         static FileInfo[] projectFiles;
 
         //ToDo update to a command line arg
-        static string MeadowFoundationPath = "../../../../../M.F";
+        static string MeadowFoundationPath = "../../../../../Meadow.Foundation";
 
         static void Main(string[] args)
         {
@@ -21,9 +21,9 @@ namespace MeadowApiModeSwitcher
                 projectFiles = GetCsProjFiles(MeadowFoundationPath);
             }
 
-            SwitchToDeveloperMode(projectFiles);
+          //  SwitchToDeveloperMode(projectFiles);
 
-       //     SwitchToPublishingMode(projectFiles);
+            SwitchToPublishingMode(projectFiles);
         }
 
         static void SwitchToPublishingMode(FileInfo[] files)
@@ -103,11 +103,18 @@ namespace MeadowApiModeSwitcher
                 {
                     var nugetInfo = GetNugetInfoFromFileInfo(fileInfoToReference);
 
-                    Console.WriteLine($"Nuget: {nugetInfo.Item1} Verion: {nugetInfo.Item2}");
+                    if(nugetInfo == null)   //if it's null it's missing meta daa
+                    {                       //which means it's not published
+                        newLines.Add(line);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Nuget: {nugetInfo.Item1} Version: {nugetInfo.Item2}");
 
-                    string newLine = $"    <PackageReference Include=\"{nugetInfo.Item1}\" Version=\"{nugetInfo.Item2}\" />";
+                        string newLine = $"    <PackageReference Include=\"{nugetInfo.Item1}\" Version=\"{nugetInfo.Item2}\" />";
 
-                    newLines.Add(newLine);
+                        newLines.Add(newLine);
+                    }
                 }
                 else
                 {
@@ -159,6 +166,9 @@ namespace MeadowApiModeSwitcher
             string packageId = string.Empty;
             string version = string.Empty;
 
+            //we'll check for metadata that verifies if it's published
+            bool isPublished = false;
+
             foreach(var line in lines)
             {
                 if (line.Contains("PackageId"))
@@ -167,6 +177,7 @@ namespace MeadowApiModeSwitcher
                     var endIndex = line.LastIndexOf("<");
 
                     packageId = line.Substring(startIndex, endIndex - startIndex);
+                    isPublished = true;
                 }
 
                 if(line.Contains("<Version>"))
@@ -178,7 +189,11 @@ namespace MeadowApiModeSwitcher
                 }
             }
 
-            return new Tuple<string, string>(packageId, version);
+            if(isPublished)
+            {
+                return new Tuple<string, string>(packageId, version);
+            }
+            return null;
         }
 
         static FileInfo GetFileForPackageId(FileInfo[] fileInfos, string packageId)
