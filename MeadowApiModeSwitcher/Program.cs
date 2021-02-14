@@ -21,9 +21,9 @@ namespace MeadowApiModeSwitcher
                 projectFiles = GetCsProjFiles(MeadowFoundationPath);
             }
 
-          //  SwitchToDeveloperMode(projectFiles);
+            SwitchToDeveloperMode(projectFiles);
 
-            SwitchToPublishingMode(projectFiles);
+          //  SwitchToPublishingMode(projectFiles);
         }
 
         static void SwitchToPublishingMode(FileInfo[] files)
