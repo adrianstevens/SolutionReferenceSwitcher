@@ -9,7 +9,16 @@ namespace MeadowApiModeSwitcher
         static FileInfo[] projectFiles;
 
         //ToDo update to a command line arg
-        static string MeadowFoundationPath = "../../../../../Meadow.Foundation";
+        static string MeadowFoundationPath = $"c:/WL/Meadow.Foundation";
+
+        static string WildcardVersion = "0.*";
+
+        static (string projectName, string nugetName)[] ExternalProjects =
+        {
+            ("Meadow.F7", "Meadow.F7"),
+            ("Meadow.Logging", "Meadow.Logging"),
+            ("Meadow.Core", "Meadow")
+        };
 
         static void Main(string[] args)
         {
@@ -21,9 +30,9 @@ namespace MeadowApiModeSwitcher
                 projectFiles = GetCsProjFiles(MeadowFoundationPath);
             }
 
-            SwitchToDeveloperMode(projectFiles);
+          //  SwitchToDeveloperMode(projectFiles);
 
-          //  SwitchToPublishingMode(projectFiles);
+            SwitchToPublishingMode(projectFiles);
         }
 
         static void SwitchToPublishingMode(FileInfo[] files)
@@ -36,17 +45,25 @@ namespace MeadowApiModeSwitcher
 
                 var referencedProjects = GetListOfProjectReferencesInProject(f);
 
-                foreach (var p in referencedProjects)
+                foreach (var project in referencedProjects)
                 {
-                    var refProjFileInfo = GetFileInfoForProjectName(p, files);
+                    var refProjFileInfo = GetFileInfoForProjectName(project, files);
 
                     if (refProjFileInfo == null)
                     {   //referenced project outside of foundation (probably core)
+                        foreach (var externalProject in ExternalProjects)
+                        {
+                            ReplaceExternalRefWithNuget(f, 
+                                                        externalProject.projectName, 
+                                                        externalProject.nugetName, 
+                                                        WildcardVersion);
+                        }
+
                         continue;
                     }
 
                     //time to change the file
-                    ReplaceLocalRefWithNugetRef(f, p, refProjFileInfo);
+                    ReplaceLocalRefWithNuget(f, refProjFileInfo, true);
                 }
             }
         }
@@ -88,39 +105,64 @@ namespace MeadowApiModeSwitcher
             return null;
         }
 
-        static void ReplaceLocalRefWithNugetRef(FileInfo fileInfoToModify, string fileName, FileInfo fileInfoToReference)
+        static void ReplaceExternalRefWithNuget(FileInfo fileInfoToModify, string projectName, string nugetPackageId, string nugetVersion)
         {
+            Console.WriteLine($"ReplaceLocalRef: {projectName}");
+
             var lines = File.ReadAllLines(fileInfoToModify.FullName);
 
-            var newLines = new List<string>();
+            var newLines = ReplaceLocalRefsWithNuget(lines,
+                                                    projectName,
+                                                    nugetPackageId,
+                                                    nugetVersion);
 
-            Console.WriteLine($"ReplaceLocalRef: {fileName}");
+            File.WriteAllLines(fileInfoToModify.FullName, newLines.ToArray());
+        }
+
+        static List<string> ReplaceLocalRefsWithNuget(string[] lines, string projectName, string packageId, string version = "0.*")
+        {
+            var newLines = new List<string>();
 
             foreach (var line in lines)
             {
                 //skip the line we're removing
-                if (line.Contains("ProjectReference") && line.Contains(fileName))
+                if (line.Contains("ProjectReference") && line.Contains(projectName))
                 {
-                    var nugetInfo = GetNugetInfoFromFileInfo(fileInfoToReference);
+                    Console.WriteLine($"Nuget: {packageId} Version: {version}");
 
-                    if(nugetInfo == null)   //if it's null it's missing meta daa
-                    {                       //which means it's not published
-                        newLines.Add(line);
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Nuget: {nugetInfo.Item1} Version: {nugetInfo.Item2}");
+                    string newLine = $"    <PackageReference Include=\"{packageId}\" Version=\"{version}\" />";
 
-                        string newLine = $"    <PackageReference Include=\"{nugetInfo.Item1}\" Version=\"{nugetInfo.Item2}\" />";
-
-                        newLines.Add(newLine);
-                    }
+                    newLines.Add(newLine);
                 }
                 else
                 {
                     newLines.Add(line);
                 }
             }
+
+            return newLines;
+        }
+
+        static void ReplaceLocalRefWithNuget(FileInfo fileInfoToModify, FileInfo fileInfoToReference, bool useWildcard = true)
+        {
+            var referencedProjectFileName = fileInfoToReference.Name;
+
+            var nugetInfo = GetNugetInfoFromFileInfo(fileInfoToReference);
+
+            if(nugetInfo == null)
+            {   //no nuget to replace
+                Console.WriteLine($"Could not find nuget info for {referencedProjectFileName}");
+                return;
+            }
+
+            Console.WriteLine($"ReplaceLocalRef: {referencedProjectFileName}");
+
+            var lines = File.ReadAllLines(fileInfoToModify.FullName);
+
+            var newLines = ReplaceLocalRefsWithNuget(lines, 
+                                                    referencedProjectFileName, 
+                                                    nugetInfo?.PackageId,
+                                                    useWildcard ? WildcardVersion : nugetInfo?.Version);
 
             File.WriteAllLines(fileInfoToModify.FullName, newLines.ToArray());
         }
@@ -159,7 +201,7 @@ namespace MeadowApiModeSwitcher
             return (new DirectoryInfo(path)).GetFiles("*.csproj", SearchOption.AllDirectories);
         }
 
-        static Tuple<string, string> GetNugetInfoFromFileInfo(FileInfo file)
+        static (string PackageId, string Version)? GetNugetInfoFromFileInfo(FileInfo file)
         {
             var lines = File.ReadAllLines(file.FullName);
 
@@ -191,7 +233,7 @@ namespace MeadowApiModeSwitcher
 
             if(isPublished)
             {
-                return new Tuple<string, string>(packageId, version);
+                return (packageId, version);
             }
             return null;
         }
