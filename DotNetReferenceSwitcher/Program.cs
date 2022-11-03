@@ -6,10 +6,21 @@ namespace MeadowApiModeSwitcher
 {
     class Program
     {
-        static FileInfo[] projectFiles;
+        static List<FileInfo> sourceProjectFiles;
+        static FileInfo[] updateFiles;
 
         //ToDo update to a command line arg
-        static string MeadowFoundationPath = $"c:/WL/Meadow.Foundation";
+        static string[] sourcePaths =
+        {
+            $"c:/WL/Meadow.Foundation",
+            $"c:/WL/Meadow.Foundation.FeatherWings",
+            $"c:/WL/Meadow.Foundation.Grove",
+            $"c:/WL/Meadow.Foundation.mikroBUS",
+            $"c:/WL/Meadow.Core",
+            $"c:/WL/Meadow.Logging",
+        };
+
+        static string updatePath = $"c:/WL/Meadow.Foundation.Grove";
 
         static string WildcardVersion = "0.*";
 
@@ -22,38 +33,47 @@ namespace MeadowApiModeSwitcher
 
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello Meadow developers!");
+            Console.WriteLine("Hello Developers!");
+
+            updateFiles = GetCsProjFiles(updatePath);
+
+            sourceProjectFiles = new List<FileInfo>();
 
             //check if path exists first
-            if (Directory.Exists(MeadowFoundationPath))
+            foreach(var path in sourcePaths)
             {
-                projectFiles = GetCsProjFiles(MeadowFoundationPath);
+                if (Directory.Exists(path))
+                {
+                    var projects = GetCsProjFiles(path);
+
+                    sourceProjectFiles.AddRange(projects);
+                }
             }
 
           //  SwitchToDeveloperMode(projectFiles);
 
-            SwitchToPublishingMode(projectFiles);
+            SwitchToPublishingMode(sourceProjectFiles, updateFiles);
         }
 
-        static void SwitchToPublishingMode(FileInfo[] files)
+        static void SwitchToPublishingMode(List<FileInfo> sourceProjectFiles, FileInfo[] updateProjectFiles)
         {
             Console.WriteLine("Developer mode");
 
-            foreach (var f in files)
+            foreach (var projectFile in updateProjectFiles)
             {
-                Console.WriteLine($"Found {f.Name}");
+                Console.WriteLine($"Found {projectFile.Name}");
 
-                var referencedProjects = GetListOfProjectReferencesInProject(f);
+                var referencedProjects = GetListOfProjectReferencesInProject(projectFile);
 
                 foreach (var project in referencedProjects)
                 {
-                    var refProjFileInfo = GetFileInfoForProjectName(project, files);
+                    var refProjFileInfo = GetFileInfoForProjectName(project, sourceProjectFiles);
 
                     if (refProjFileInfo == null)
                     {   //referenced project outside of foundation (probably core)
                         foreach (var externalProject in ExternalProjects)
                         {
-                            ReplaceExternalRefWithNuget(f, 
+                            ReplaceExternalRefWithNuget(projectFile, 
                                                         externalProject.projectName, 
                                                         externalProject.nugetName, 
                                                         WildcardVersion);
@@ -63,7 +83,7 @@ namespace MeadowApiModeSwitcher
                     }
 
                     //time to change the file
-                    ReplaceLocalRefWithNuget(f, refProjFileInfo, true);
+                    ReplaceLocalRefWithNuget(projectFile, refProjFileInfo, true);
                 }
             }
         }
@@ -90,12 +110,10 @@ namespace MeadowApiModeSwitcher
             }
         }
 
-        static FileInfo GetFileInfoForProjectName(string projectName, FileInfo[] files)
+        static FileInfo GetFileInfoForProjectName(string projectName, List<FileInfo> files)
         {
             foreach (var f in files)
             {
-                var name = Path.GetFileName(f.FullName);
-
                 if (Path.GetFileName(f.FullName) == projectName)
                 {
                     return f;
