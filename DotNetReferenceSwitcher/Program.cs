@@ -18,6 +18,7 @@ namespace MeadowApiModeSwitcher
             $"c:/WL/Meadow.Foundation.mikroBUS",
             $"c:/WL/Meadow.Core",
             $"c:/WL/Meadow.Logging",
+            $"c:/WL/Maple",
         };
 
         static string updatePath = $"c:/WL/Meadow.Foundation.Grove";
